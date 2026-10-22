@@ -41,6 +41,8 @@ class CarPlayVpnService : VpnService() {
     sealed class AttachResult {
         data object Started : AttachResult()
         data object AlreadyStarted : AttachResult()
+        /** Existing TUN reused; NCM bridge swapped to the new NCM without re-establishing VPN. */
+        data object Reused : AttachResult()
         data class Failed(val message: String) : AttachResult()
     }
 
@@ -63,7 +65,8 @@ class CarPlayVpnService : VpnService() {
     @Volatile private var attachment: AirPlayAttachment? = null
     private var serverSocket: ServerSocket? = null
     private var additionalServers: List<ServerSocket> = emptyList()
-    private var bridge: Ipv6NcmBridge? = null
+    @Volatile private var bridge: Ipv6NcmBridge? = null
+    @Volatile private var lwipBridge: LwipNcmBridge? = null
     private var tun: ParcelFileDescriptor? = null
     private var attachGeneration = 0
 
@@ -85,6 +88,25 @@ class CarPlayVpnService : VpnService() {
         listener: AirPlaySessionListener,
         media: AirPlayMediaHandler,
     ): AttachResult {
+        // 上一次尝试的 TUN 若仍然打开，则复用而不重新 establish，避免 netd 的 fwmark 规则泄漏。
+        // detach() 只置 active=false 并保留 tun，因此这里检查 tun，而不是 active。
+        var reuseTun = false
+        val existingTun = tun
+        if (existingTun != null) {
+            val canReuse = if (active.get()) {
+                attachment?.address?.hostAddress == linkLocal
+            } else {
+                true
+            }
+            if (canReuse) {
+                reuseTun = true
+                runCatching { listener.onDebugLog("wired VPN TUN reused (no re-establish, fwmark rule preserved)") }
+            } else {
+                Log.i(TAG, "replacing stale NCM/VPN attachment (TUN not reusable)")
+                existingTun.close()
+                tun = null
+            }
+        }
         if (active.get()) {
             Log.i(TAG, "replacing stale NCM/VPN attachment")
             releaseLocked()
@@ -98,22 +120,31 @@ class CarPlayVpnService : VpnService() {
             }
             require(hostMac.size == 6) { "hostMac must be 6 bytes" }
 
-            val tunFd = Builder()
-                .addAddress(linkLocal, LINK_PREFIX)
-                .addRoute(LINK_LOCAL_ROUTE, LINK_PREFIX)
-                .setSession(SESSION_NAME)
-                .setMtu(TUN_MTU)
-                .setBlocking(true)
-                // An empty app list routes every UID through this VPN. Scope it before establish;
-                // rejection must reach the existing attachment cleanup, never an unscoped retry.
-                .addAllowedApplication(packageName)
-                .establish()
-                ?: throw IOException("VpnService.establish returned null")
+            val tunFd = if (reuseTun) {
+                existingTun!!
+            } else {
+                Builder()
+                    .addAddress(linkLocal, LINK_PREFIX)
+                    .addRoute(LINK_LOCAL_ROUTE, LINK_ROUTE_PREFIX)
+                    .setSession(SESSION_NAME)
+                    .setMtu(TUN_MTU)
+                    .setBlocking(true)
+                    // An empty app list routes every UID through this VPN. Scope it before establish;
+                    // rejection must reach the existing attachment cleanup, never an unscoped retry.
+                    .addAllowedApplication(packageName)
+                    .establish()
+                    ?: throw IOException("VpnService.establish returned null")
+            }
             tun = tunFd
 
-            val ipv6Bridge = Ipv6NcmBridge(ncm, tunFd, hostMac) { error ->
-                onTransportError(generation, listener, error)
-            }
+            val ipv6Bridge = Ipv6NcmBridge(
+                ncm = ncm,
+                tun = tunFd,
+                hostMac = hostMac,
+                hostLinkLocal = linkLocal,
+                onDebugLog = { line -> runCatching { listener.onDebugLog(line) } },
+                onError = { error -> onTransportError(generation, listener, error) },
+            )
             ipv6Bridge.start()
             bridge = ipv6Bridge
 
@@ -121,10 +152,111 @@ class CarPlayVpnService : VpnService() {
                 generation,
                 AirPlayAttachment(scopedToTunnel(address, listener), config, identity, pairings, mfi, listener, media),
             )
-            AttachResult.Started
+            boundPort()?.let { port ->
+                runCatching { listener.onDebugLog("wired airplay listen kernel-check: ${verifyTcp6Listen(port)}") }
+            }
+            // Issue #148：仅安装单播 fe80::/10 路由时，JmDNS 组播无法穿过 TUN，
+            // 在包层以内播单播应答 iPhone 的 mDNS 查询。best-effort，失败不影响已成功的 attach。
+            runCatching {
+                ipv6Bridge.mdnsResponder = WiredMdnsResponder(
+                    deviceName = config.deviceName,
+                    hostLinkLocal = linkLocal,
+                    airPlayPort = boundPort() ?: config.port,
+                    txtRecords = CarPlayBonjourProtocol.airPlayTxtRecords(config, identity),
+                )
+                listener.onDebugLog(
+                    "wired mdns unicast responder armed on $linkLocal port=${boundPort() ?: config.port}",
+                )
+            }.onFailure { error ->
+                Log.w(TAG, "wired mDNS unicast responder setup failed", error)
+                runCatching { listener.onDebugLog("wired mDNS unicast responder setup failed: ${error.message}") }
+            }
+            if (reuseTun) AttachResult.Reused else AttachResult.Started
         } catch (error: Exception) {
             releaseLocked()
             lastAttachFailure = attachFailure(error)
+            AttachResult.Failed(error.message ?: error.javaClass.simpleName)
+        }
+    }
+
+    /**
+     * Starts the AirPlay listener on loopback (127.0.0.1) and relays traffic to/from USB CDC-NCM
+     * using the userspace lwIP protocol stack. No VpnService establish or Linux TUN required.
+     */
+    @Synchronized
+    fun attachUserspace(
+        ncm: NcmUsbBridge,
+        linkLocal: String,
+        hostMac: ByteArray,
+        config: AirPlayConfig,
+        identity: AirPlayIdentity,
+        pairings: PairingStore,
+        mfi: MfiAuthenticator?,
+        listener: AirPlaySessionListener,
+        media: AirPlayMediaHandler,
+    ): AttachResult {
+        if (active.get()) {
+            Log.i(TAG, "replacing stale attachment for userspace lwIP")
+            releaseLocked()
+        }
+        active.set(true)
+        val generation = ++attachGeneration
+        lastAttachFailure = null
+        var attachStage = "Userspace lwIP setup"
+        return try {
+            require(hostMac.size == 6) { "hostMac must be 6 bytes" }
+
+            val lwip = LwipNcmBridge(
+                ncm = ncm,
+                hostMac = hostMac,
+                hostLinkLocal = linkLocal,
+                onDebugLog = { line -> runCatching { listener.onDebugLog(line) } },
+                onError = { error -> onTransportError(generation, listener, error) },
+            )
+            attachStage = "NCM lwIP bridge startup"
+            lwip.start()
+            lwipBridge = lwip
+            runCatching { listener.onDebugLog("wired userspace lwIP bridge started") }
+
+            attachStage = "AirPlay loopback listener bind"
+            val loopback = InetAddress.getByName("127.0.0.1")
+            val wrappedListener = object : AirPlaySessionListener by listener {
+                override fun onPortBound(port: Int, isTcp: Boolean) {
+                    lwip.registerPort(port, isTcp)
+                    listener.onPortBound(port, isTcp)
+                }
+            }
+
+            startAirPlayServer(
+                generation,
+                AirPlayAttachment(loopback, config, identity, pairings, mfi, wrappedListener, media),
+            )
+            val bound = boundPort() ?: config.port
+            lwip.registerPort(bound, isTcp = true)
+            runCatching { listener.onDebugLog("wired AirPlay listener bound on 127.0.0.1 port=$bound (lwIP userspace)") }
+
+            attachStage = "wired mDNS unicast responder"
+            runCatching {
+                lwip.mdnsResponder = WiredMdnsResponder(
+                    deviceName = config.deviceName,
+                    hostLinkLocal = linkLocal,
+                    airPlayPort = bound,
+                    txtRecords = CarPlayBonjourProtocol.airPlayTxtRecords(config, identity),
+                )
+                runCatching {
+                    listener.onDebugLog("wired mDNS unicast responder installed on lwIP bridge port=$bound")
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "wired mDNS unicast responder unavailable", error)
+                runCatching { listener.onDebugLog("wired mDNS responder failed: ${error.message}") }
+            }
+
+            AttachResult.Started
+        } catch (error: Exception) {
+            lastAttachFailure = "$attachStage: ${attachFailure(error)}"
+            Log.e(TAG, "wired userspace lwIP attach failed: $lastAttachFailure", error)
+            runCatching { listener.onDebugLog("wired userspace lwIP attach failed: $lastAttachFailure") }
+            releaseLocked()
             AttachResult.Failed(error.message ?: error.javaClass.simpleName)
         }
     }
@@ -178,11 +310,97 @@ class CarPlayVpnService : VpnService() {
 
     fun isAttached(): Boolean = active.get() && attachment != null
 
+    /** 让有线桥立即再发一次无条件邻居通告，用于 iAP2 控制通道就绪或重连时机。 */
+    fun sendUnsolicitedNeighborAdvertisement(force: Boolean = false) {
+        bridge?.sendUnsolicitedNeighborAdvertisement(force)
+        lwipBridge?.sendUnsolicitedNeighborAdvertisement(force)
+    }
+
     /** Port the AirPlay listener actually bound, which may differ from the configured port. */
     fun boundPort(): Int? = attachment?.config?.port
 
+    /**
+     * Issue #133: Java 的 bind() 成功并不能证明内核真的注册了监听 socket（netd/VPN 卡死会撒谎）。
+     * /proc/net/tcp6 全局可读：确认目标端口确实存在 LISTEN socket，让下一份诊断报告能区分
+     * "监听器未注册" 与 "SYN 在 TUN 入口到 TCP 之间丢失"。
+     */
+    private fun verifyTcp6Listen(port: Int): String {
+        val portHex = port.toString(16).uppercase().padStart(4, '0')
+        return try {
+            var found = false
+            java.io.File("/proc/net/tcp6").bufferedReader().use { reader ->
+                var line = reader.readLine()
+                while (line != null) {
+                    // 列：sl | local_address | rem_address | st | ...
+                    val fields = line.trim().split(Regex("\\s+"))
+                    if (fields.size >= 4 &&
+                        fields[1].endsWith(":$portHex", ignoreCase = true) &&
+                        fields[3].equals("0A", ignoreCase = true)
+                    ) {
+                        found = true
+                        break
+                    }
+                    line = reader.readLine()
+                }
+            }
+            if (found) {
+                "kernel LISTEN present on tcp6 port $port"
+            } else {
+                "WARNING: no LISTEN socket for port $port in /proc/net/tcp6 " +
+                    "(bind succeeded but the kernel never registered it; reboot the head unit)"
+            }
+        } catch (error: Exception) {
+            "/proc/net/tcp6 unreadable: ${error.message}"
+        }
+    }
+
+    /**
+     * 诊断快照：AirPlay 端口上的 TCP 状态。用户态模式读取 lwIP 内部快照，
+     * VPN 模式解析 /proc/net/tcp6 内核表。用于区分 "SYN 从未到达 TCP 栈" 与
+     * "SYN 已到达但 SYN-ACK 回程丢失" 这两类故障（legacy issue #155/#123）。
+     */
+    fun tunTcpSnapshot(): String {
+        val port = boundPort() ?: return "tun tcp6 snapshot unavailable: no bound port"
+        val portHex = port.toString(16).uppercase().padStart(4, '0')
+        val injected = lwipBridge?.injectedTcpPackets?.get() ?: bridge?.injectedTcpPackets?.get() ?: -1
+        if (lwipBridge != null) {
+            val lwipSnap = lwipBridge?.tcpSnapshot() ?: "none"
+            return "userspace lwIP tcp port=$port injectedTcp=$injected $lwipSnap"
+        }
+        var listen = 0
+        var synRecv = 0
+        var established = 0
+        var other = 0
+        runCatching {
+            java.io.File("/proc/net/tcp6").bufferedReader().use { reader ->
+                var line = reader.readLine()
+                while (line != null) {
+                    // 列：sl | local_address | rem_address | st | ...
+                    // st：01=ESTABLISHED 03=SYN_RECV 0A=LISTEN
+                    val fields = line.trim().split(Regex("\\s+"))
+                    if (fields.size >= 4 &&
+                        fields[1].endsWith(":$portHex", ignoreCase = true)
+                    ) {
+                        when {
+                            fields[3].equals("0A", ignoreCase = true) -> listen++
+                            fields[3].equals("03", ignoreCase = true) -> synRecv++
+                            fields[3].equals("01", ignoreCase = true) -> established++
+                            else -> other++
+                        }
+                    }
+                    line = reader.readLine()
+                }
+            }
+        }
+        return "tun tcp6 port=$port listen=$listen synRecv=$synRecv " +
+            "established=$established other=$other injectedTcp=$injected"
+    }
+
     override fun onDestroy() {
-        detach()
+        releaseLocked()
+        // releaseLocked 会保留 TUN 供复用；Service 真正销毁时才关闭它。
+        tun?.close()
+        tun = null
         super.onDestroy()
     }
 
@@ -379,14 +597,18 @@ class CarPlayVpnService : VpnService() {
         closeSessionsLocked()
         bridge?.close()
         bridge = null
-        tun?.close()
-        tun = null
+        lwipBridge?.close()
+        lwipBridge = null
+        // 刻意不关闭 TUN：保留 fd 供下一次 attach 复用，避免反复 establish 泄漏 netd fwmark 规则。
+        // 真正的销毁路径在 onDestroy()。
     }
 
     companion object {
         private const val TAG = "xcertplay-usb"
         private const val LINK_PREFIX = 64
         private const val LINK_LOCAL_ROUTE = "fe80::"
+        /** 路由加宽到 fe80::/10：iPhone 的 EUI-64 链路本地地址不在 fe80::/64 内（issue #148/#150）。 */
+        private const val LINK_ROUTE_PREFIX = 10
         private const val SESSION_NAME = "xcertplay CarPlay"
         private const val TUN_MTU = 1500
         private const val TUN_LOOKUP_ATTEMPTS = 10

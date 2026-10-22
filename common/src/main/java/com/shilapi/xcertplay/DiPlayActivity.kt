@@ -129,6 +129,7 @@ internal enum class SettingsSection {
     LAUNCHER_BUBBLE,
     BYD_NAVIGATION,
     PERMISSIONS_AND_HELP,
+    NETWORK_TRANSPORT,
     LANGUAGE,
 }
 
@@ -160,6 +161,7 @@ internal object SettingsInformationArchitecture {
             SettingsSection.ADVANCED_MEDIA,
             SettingsSection.NAVIGATION_WHEEL,
             SettingsSection.AMBIENT_LIGHTING,
+            SettingsSection.NETWORK_TRANSPORT,
         ),
     )
 }
@@ -2056,6 +2058,15 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 AirPlayPersistence.loadCarBluetoothAudio(this)) {
                 AirPlayPersistence.saveCarBluetoothAudio(this, it)
                 reconnectIfRunning()
+            }
+        }
+        // Experimental transport switch: lwIP user-space networking instead of the system VPN.
+        filteredSection(content, SettingsSection.NETWORK_TRANSPORT,
+            getString(R.string.settings_network_transport), R.drawable.ic_dp_connection) { card ->
+            reconnectingToggle(card, getString(R.string.settings_userspace_network),
+                getString(R.string.settings_userspace_network_description),
+                AirPlayPersistence.loadUserspaceNetworkEnabled(this)) { enabled ->
+                AirPlayPersistence.saveUserspaceNetworkEnabled(this, enabled)
             }
         }
         filteredSection(content, SettingsSection.CAR_BUTTON,

@@ -845,6 +845,9 @@
     <string name="settings_cluster_speedometer_opacity">Opacidad del velocímetro</string>
     <string name="settings_harman_fullscreen_experimental">Pantalla completa Harman (experimental)</string>
     <string name="settings_harman_fullscreen_experimental_description">Permite que CarPlay ocupe el panel lateral original en unidades Harman compatibles. Se aplica al abrir de nuevo la ventana de CarPlay; otros firmwares podrían mostrarse incorrectamente.</string>
+    <string name="settings_network_transport">Transporte de red</string>
+    <string name="settings_userspace_network">Red en espacio de usuario (experimental)</string>
+    <string name="settings_userspace_network_description">Gestiona el tráfico de red del iPhone con la pila lwIP integrada en lugar de la VPN del sistema, por lo que no se solicita permiso de VPN. Surte efecto en la próxima conexión.</string>
     <string name="settings_hotspot_name_non_english">Con caracteres chinos u otros no ingleses en el nombre, CarPlay puede quedarse en «Preparando CarPlay…»: algunas unidades emiten ese nombre de una forma que el iPhone no encuentra. Si pasa, cambia el nombre del punto de acceso del coche a letras inglesas y números.</string>
     <string name="settings_speech_without_low_rates">Voz de navegación más clara por USB (experimental)</string>
     <string name="settings_speech_without_low_rates_description">Por USB, el iPhone puede enviar las indicaciones de navegación y las respuestas habladas de Siri con calidad telefónica de 8 kHz. Esta opción deja de ofrecer 8 y 16 kHz para ese audio y el iPhone elige una frecuencia mayor. Si las indicaciones dejan de oírse, desactívala. Reconecta CarPlay.</string>

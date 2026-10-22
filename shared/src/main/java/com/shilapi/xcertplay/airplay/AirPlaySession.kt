@@ -39,6 +39,11 @@ interface AirPlaySessionListener {
     fun onRemoteControlMessage(session: AirPlaySession, streamId: Long, message: Map<String, Any?>) {}
     /** Video in car: requestUI "videoplayback:", the iPhone asks the car to show its video player. */
     fun onVideoPlaybackUiRequested(session: AirPlaySession) {}
+    /**
+     * A local socket port started accepting for this session (SETUP streams, NTP, keepalive,
+     * event channel). The userspace lwIP path registers each one for loopback relaying.
+     */
+    fun onPortBound(port: Int, isTcp: Boolean) {}
     fun onDebugLog(message: String) {}
 }
 
@@ -701,6 +706,7 @@ class AirPlaySession(
                         activeStreams.add(type)
                         if (type == STREAM_TYPE_ALT_SCREEN) beginClusterContent()
                         else mainScreenToken = Any()
+                        listener.onPortBound(port, isTcp = true)
                         result.add(linkedMapOf("type" to type, "dataPort" to port))
                     }
                 }
@@ -713,6 +719,8 @@ class AirPlaySession(
                     )
                     if (streamResponse != null) {
                         activeStreams.add(type)
+                        (streamResponse["dataPort"] as? Number)?.toInt()?.let { listener.onPortBound(it, isTcp = false) }
+                        (streamResponse["controlPort"] as? Number)?.toInt()?.let { listener.onPortBound(it, isTcp = false) }
                         result.add(streamResponse)
                     }
                 }
@@ -722,6 +730,7 @@ class AirPlaySession(
                         "dataPort=${streamResponse?.get("dataPort") ?: "none"}")
                     if (streamResponse != null) {
                         activeStreams.add(type)
+                        (streamResponse["dataPort"] as? Number)?.toInt()?.let { listener.onPortBound(it, isTcp = true) }
                         result.add(streamResponse)
                     }
                 }
@@ -733,6 +742,7 @@ class AirPlaySession(
                     )
                     if (streamResponse != null) {
                         activeStreams.add(type)
+                        (streamResponse["dataPort"] as? Number)?.toInt()?.let { listener.onPortBound(it, isTcp = true) }
                         result.add(streamResponse)
                     }
                 }
@@ -802,6 +812,7 @@ class AirPlaySession(
     private fun openTiming(peerPort: Int): Int {
         val port = ntp.listen()
         if (peerPort > 0) peerAddress?.let { ntp.start(it, peerPort) }
+        listener.onPortBound(port, isTcp = false)
         return port
     }
 
@@ -814,6 +825,7 @@ class AirPlaySession(
             isDaemon = true
             start()
         }
+        listener.onPortBound(socket.localPort, isTcp = false)
         return socket.localPort
     }
 
@@ -832,6 +844,7 @@ class AirPlaySession(
         val server = ServerSocket(0, 50, InetAddress.getByName("::"))
         eventServer = server
         spawnEvent("airplay-event-accept") { acceptEvent(server) }
+        listener.onPortBound(server.localPort, isTcp = true)
         return server.localPort
     }
 

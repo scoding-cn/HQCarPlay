@@ -44,3 +44,15 @@ dependencies {
     testImplementation libs.junit
     testImplementation 'org.robolectric:robolectric:4.17'
 }
+
+// 在 Gradle 配置 ndk-build 之前，先拉取固定 commit 的 lwIP 源码，
+// 这样本地 Android Studio 构建也能自动补齐，不只在 CI 生效
+def prepareLwipSources = tasks.register('prepareLwipSources', Exec) {
+    workingDir rootProject.projectDir
+    commandLine (System.getProperty('os.name').toLowerCase().contains('windows') ? ['py', '-3', 'scripts/prepare-lwip.py'] : ['python3', 'scripts/prepare-lwip.py'])
+}
+tasks.configureEach { task ->
+    if (task.name.startsWith('generateJsonModel') || task.name.startsWith('externalNativeBuild')) {
+        task.dependsOn(prepareLwipSources)
+    }
+}

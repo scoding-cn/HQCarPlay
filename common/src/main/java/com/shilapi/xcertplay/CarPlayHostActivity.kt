@@ -220,6 +220,7 @@ class CarPlayHostActivity : ComponentActivity() {
         existingWifiSsid = existingWifiSsid,
         existingWifiPassphrase = existingWifiPassphrase,
         locationReportingEnabled = locationReportingEnabled,
+        userspaceNetworkEnabled = userspaceNetworkEnabled,
         availableCurrentMilliAmps = AirPlayPersistence.loadUsbChargingCurrent(this).milliAmps,
     )
 
@@ -539,6 +540,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var microphoneAvailable = false
     private var microphonePermissionResolved = false
     private var wirelessEnabled = false
+    private var userspaceNetworkEnabled = true
     private var mfiTarget = MfiTarget.LOCAL
     private var mfiI2cPath = AirPlayPersistence.DEFAULT_MFI_I2C_PATH
     private var remoteMfiServer = ""
@@ -925,6 +927,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private fun loadConnectionSettings() {
         hideBydCallPopup = AirPlayPersistence.loadHideBydCallPopup(this)
         wirelessEnabled = AirPlayPersistence.loadWirelessEnabled(this)
+        userspaceNetworkEnabled = AirPlayPersistence.loadUserspaceNetworkEnabled(this)
         mfiTarget = AirPlayPersistence.loadMfiTarget(this)
         mfiI2cPath = AirPlayPersistence.loadMfiI2cPath(this)
         remoteMfiServer = AirPlayPersistence.loadRemoteMfiServer(this)
@@ -948,7 +951,8 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         if (wirelessEnabled) {
             requestWirelessPermissions()
-        } else if (!requestWiredPermissions()) {
+        } else if (!requestWiredPermissions() && !userspaceNetworkEnabled) {
+            // 用户态 lwIP 传输不使用 VpnService，仅在 VPN 路径下才请求系统授权。
             requestVpnConsent()
         }
     }
@@ -5882,7 +5886,12 @@ class CarPlayHostActivity : ComponentActivity() {
             return
         }
         val size = activeDisplaySize ?: return
-        val transportReady = if (wirelessEnabled) wirelessPermissionsReady else vpnReady
+        // 用户态 lwIP 传输不依赖 VpnService 授权，无需 vpnReady 即可启动。
+        val transportReady = when {
+            wirelessEnabled -> wirelessPermissionsReady
+            userspaceNetworkEnabled -> true
+            else -> vpnReady
+        }
         val locationReady = !locationReportingEnabled || locationPermissionAvailable
         if (
             !transportReady ||

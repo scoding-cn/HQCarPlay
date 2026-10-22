@@ -1412,6 +1412,8 @@ class CarPlayController(
                     CarPlayVpnService.AttachResult.Started -> Unit
                     CarPlayVpnService.AttachResult.AlreadyStarted ->
                         throw IOException("Wireless AirPlay transport is already attached")
+                    CarPlayVpnService.AttachResult.Reused ->
+                        throw IOException("Wireless AirPlay transport cannot reuse a wired TUN")
                     is CarPlayVpnService.AttachResult.Failed -> {
                         debugLog("wireless AirPlay listener attach failed detail=${service.lastAttachFailure}")
                         throw IOException(result.message)
@@ -2337,6 +2339,8 @@ class CarPlayController(
                             "wired start: no AirPlay session ${WiredStartWatchdog.TIMEOUT_MILLIS / 1000} s " +
                                 "after carplay-start-session; NCM ${ncm.trafficSummary(endpoint.airPlayPort)}",
                         )
+                        // TCP 状态快照进诊断报告：区分 SYN 未到达 TCP 栈与 SYN-ACK 回程丢失。
+                        vpnService?.let { debugLog("wired ${it.tunTcpSnapshot()}") }
                         fail(IphoneUsbException.TimedOut("The iPhone did not open CarPlay over USB in time"))
                     }
                 },
@@ -2359,6 +2363,8 @@ class CarPlayController(
                     if (message.startsWith(START_SESSION_PROGRESS)) {
                         wiredDeviceName?.let(WiredSessionMemory::started)
                         startWatchdog.startSessionSent()
+                        // 每次发出 0x4301 后强制通告 NA，让 iPhone 立即解析主机的链路本地地址。
+                        vpnService?.sendUnsolicitedNeighborAdvertisement(force = true)
                     }
                     debugLog("wired $message")
                 },
@@ -2368,6 +2374,9 @@ class CarPlayController(
                     Iap2WiredControlTerminal.TIMED_OUT -> CarPlayStatus.ControlEnded
                     Iap2WiredControlTerminal.CHANNEL_CLOSED ->
                         CarPlayStatus.Failed("CarPlay control channel closed")
+                    // iPhone 在 StartSession 之后长时间静默：显式失败走既有重连路径重建链路。
+                    Iap2WiredControlTerminal.PEER_SILENT ->
+                        CarPlayStatus.Failed("Wired CarPlay peer silent; resetting link")
                 },
             )
         } catch (error: Throwable) {
@@ -2874,19 +2883,35 @@ class CarPlayController(
             ncm.close()
             return false
         }
-        debugLog("wired VPN service bound; attaching NCM transport")
+        debugLog("wired VPN service bound; attaching NCM transport; userspaceNetworkEnabled=${config.userspaceNetworkEnabled}")
         val result = try {
-            service.attach(
-                ncm = ncm,
-                linkLocal = config.linkLocal,
-                hostMac = hostMac,
-                config = airPlayConfig,
-                identity = identity,
-                pairings = pairings,
-                mfi = mfiSession?.client,
-                listener = sessionListener,
-                media = media,
-            )
+            if (config.userspaceNetworkEnabled) {
+                // 用户态 lwIP 路径：无 VPN/TUN、无授权弹窗；失败即按 Failed 处理，
+                // 由外层重试循环重建连接（NCM 桥失败时已随 lwipBridge 关闭，无法原地回退）。
+                service.attachUserspace(
+                    ncm = ncm,
+                    linkLocal = config.linkLocal,
+                    hostMac = hostMac,
+                    config = airPlayConfig,
+                    identity = identity,
+                    pairings = pairings,
+                    mfi = mfiSession?.client,
+                    listener = sessionListener,
+                    media = media,
+                )
+            } else {
+                service.attach(
+                    ncm = ncm,
+                    linkLocal = config.linkLocal,
+                    hostMac = hostMac,
+                    config = airPlayConfig,
+                    identity = identity,
+                    pairings = pairings,
+                    mfi = mfiSession?.client,
+                    listener = sessionListener,
+                    media = media,
+                )
+            }
         } catch (error: Throwable) {
             ncm.close()
             onStatus(CarPlayStatus.Failed(error.message ?: error.javaClass.simpleName))
@@ -2901,6 +2926,11 @@ class CarPlayController(
                 debugLog("wired VPN/NCM transport attach result=already-started")
                 ncm.close()
                 false
+            }
+            CarPlayVpnService.AttachResult.Reused -> {
+                // TUN 复用、NCM 桥已换新：旧 NCM 由 service 在换桥时关闭，不要关掉新的。
+                debugLog("wired VPN/NCM transport attach result=reused (TUN kept)")
+                true
             }
             is CarPlayVpnService.AttachResult.Failed -> {
                 debugLog("wired VPN/NCM transport attach result=failed ${result.message} detail=${service.lastAttachFailure}")

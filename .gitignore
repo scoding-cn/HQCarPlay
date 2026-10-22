@@ -15,6 +15,9 @@ local.properties
 .externalNativeBuild/
 captures/
 
+# 由 scripts/prepare-lwip.py 拉取的固定版本 lwIP 依赖
+/shared/src/main/jni/lwip/
+
 # Local agent working notes
 /agent_docs/
 
