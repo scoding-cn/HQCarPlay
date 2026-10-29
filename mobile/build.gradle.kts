@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.android.htmlviewer"
+        applicationId = "com.shihab.diplay"
         minSdk = 24
         targetSdk = 37
         versionCode = 41

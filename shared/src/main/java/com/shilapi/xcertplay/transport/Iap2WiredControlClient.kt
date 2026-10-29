@@ -98,17 +98,19 @@ class Iap2WiredControlClient(
                         }
                     }
                 }
-                val pollTimeout = vehicleStatus.pollTimeout(location.pollTimeout(remaining)).let {
-                    if (startAgainPending) minOf(it, START_AGAIN_POLL_MILLIS) else it
+                val startupRemaining = if (carPlayStartSessions == 0) {
+                    ((startupDeadlineNanos - System.nanoTime()) / NANOS_PER_MILLISECOND).coerceAtLeast(0L)
+                } else remaining
+                if (startupRemaining == 0L) {
+                    onProgress("iap2 wired startup timed out waiting for CarPlay availability")
+                    return Iap2WiredControlResult(Iap2WiredControlTerminal.TIMED_OUT, stage, forwardedFrames, carPlayStartSessions)
                 }
-//                val startupRemaining = if (carPlayStartSessions == 0) {
-//                    ((startupDeadlineNanos - System.nanoTime()) / NANOS_PER_MILLISECOND).coerceAtLeast(0L)
-//                } else remaining
-//                if (startupRemaining == 0L) {
-//                    onProgress("iap2 wired startup timed out waiting for CarPlay availability")
-//                    return Iap2WiredControlResult(Iap2WiredControlTerminal.TIMED_OUT, stage, forwardedFrames, carPlayStartSessions)
-//                }
-//                val pollTimeout = vehicleStatus.pollTimeout(location.pollTimeout(minOf(remaining, startupRemaining)))
+                // 三个上限取最小：整体 deadline、启动期 60s availability 窗口、HOLD 期 500ms 状态机探测
+                val pollTimeout = vehicleStatus.pollTimeout(
+                    location.pollTimeout(minOf(remaining, startupRemaining)),
+                ).let { base ->
+                    if (startAgainPending) minOf(base, START_AGAIN_POLL_MILLIS) else base
+                }
                 val incoming = session.recv(pollTimeout)
                 if (incoming == null) {
                     if (session.isClosed) {

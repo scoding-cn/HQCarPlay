@@ -1031,6 +1031,9 @@
     <string name="vpn_authorization_adb_command">헤드 유닛에 연결된 컴퓨터에서 다음 ADB 명령을 한 번 실행한 뒤 iPhone을 다시 연결하세요:\nadb shell appops set %1$s ACTIVATE_VPN allow</string>
     <string name="settings_navigation_prompt_audio_focus">내비게이션 안내 시 오디오 포커스 요청</string>
     <string name="settings_navigation_prompt_audio_focus_description">CarPlay 내비게이션 안내가 나올 때마다 DiPlay가 임시 오디오 포커스를 요청해 다른 소리의 음량을 낮추고, 안내가 끝나면 해제합니다. 음악을 재생해야 안내가 들리거나, 안내 중 음악 소리를 줄이고 싶을 때 사용하세요. 안내 중에는 헤드 유닛 자체 오디오의 음량이 줄거나 재생이 일시중지될 수 있습니다. 다음 CarPlay 연결부터 적용됩니다.</string>
+    <string name="settings_network_transport">네트워크 전송 방식</string>
+    <string name="settings_userspace_network">사용자 공간 네트워크 (실험 기능)</string>
+    <string name="settings_userspace_network_description">시스템 VPN 대신 내장 lwIP 스택으로 iPhone의 네트워크 트래픽을 처리하므로 VPN 권한을 요청하지 않습니다. 다음 연결부터 적용됩니다.</string>
     <string name="settings_carplay_same_task">런처 카드에서 CarPlay 열기 (실험 기능)</string>
     <string name="settings_carplay_same_task_description">BYD DiYou 데스크톱처럼 DiPlay를 카드나 화면 속 화면 창으로 표시하는 런처용 설정입니다. 0.2.11 이전 버전처럼 별도의 전체 화면 대신 DiPlay 창 안에서 CarPlay를 엽니다. 연결을 끊지 않고 다음에 CarPlay 화면을 열 때 적용됩니다.</string>
     <string name="settings_call_at_call_rate">통화의 원래 샘플링 레이트 사용 (실험 기능)</string>
