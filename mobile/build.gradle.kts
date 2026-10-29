@@ -17,8 +17,8 @@ android {
         applicationId = "com.android.htmlviewer"
         minSdk = 24
         targetSdk = 37
-        versionCode = 40
-        versionName = "beta-0.0.1"
+        versionCode = 41
+        versionName = "0.2.22"
 
     }
 

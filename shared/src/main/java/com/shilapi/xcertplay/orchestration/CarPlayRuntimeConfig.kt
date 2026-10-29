@@ -72,6 +72,8 @@ class CarPlayRuntimeConfig(
     val existingWifiPassphrase: String = "",
     /** 有线连接时优先使用 lwIP 用户态传输（无需 VPN 授权与 TUN）；关闭则走原有 VpnService 路径。 */
     val userspaceNetworkEnabled: Boolean = true,
+    /** Interface override for units whose station LAN runs on an interface Android does not report as Wi-Fi, e.g. a USB NIC on eth1. */
+    val existingWifiInterface: String? = null,
 ) {
     init {
         require(iphoneDevices.all { it.vendorId == APPLE_VENDOR_ID }) {
