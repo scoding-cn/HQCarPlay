@@ -519,6 +519,9 @@ open class CarPlayHostActivity : ComponentActivity() {
     private var pendingDisplaySize: DisplaySize? = null
     private var sessionDisplay: CarPlaySessionDisplay? = null
     private var touchOutsideContent = false
+    // 触摸被哪一层吞掉决定下次报告能否定位，四个静默分支各占一位。
+    private val touchSwallowCounts = IntArray(TOUCH_SWALLOW_REASONS)
+    private var touchSwallowWindowStart = 0L
     private var displayScalePercent = 100
     private var displayScaleTenths = CarPlayDisplayScale.DEFAULT_TENTHS
     private var uiScalePercent = CarPlayUiScale.DEFAULT
@@ -6529,7 +6532,10 @@ open class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun onHostTouch(view: View, event: MotionEvent): Boolean {
-        if (menuOpen) return true
+        if (menuOpen) {
+            noteSwallowedTouch(TOUCH_SWALLOW_MENU)
+            return true
+        }
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -6544,12 +6550,14 @@ open class CarPlayHostActivity : ComponentActivity() {
                     gestureStartY = pointerCentroid(event, horizontal = false)
                     releaseCarPlayTouches()
                     appendLog("Settings swipe tracking started; fingers=$gestureFingerCount")
+                    noteSwallowedTouch(TOUCH_SWALLOW_GESTURE)
                     return true
                 }
             }
         }
 
         if (gestureSequenceActive) {
+            noteSwallowedTouch(TOUCH_SWALLOW_GESTURE)
             if (event.actionMasked == MotionEvent.ACTION_POINTER_UP || event.pointerCount != gestureFingerCount) {
                 gestureTracking = false
             }
@@ -6591,13 +6599,17 @@ open class CarPlayHostActivity : ComponentActivity() {
             touchOutsideContent = !content.contains(event.x, event.y)
         }
         if (touchOutsideContent) {
+            noteSwallowedTouch(TOUCH_SWALLOW_OUTSIDE)
             // Ignore the entire touch sequence when it starts in a letterbox bar.
             if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
                 touchOutsideContent = false
             }
             return true
         }
-        if (gestureFingerCount > 0 && holdTouch(event, content)) return true
+        if (gestureFingerCount > 0 && holdTouch(event, content)) {
+            noteSwallowedTouch(TOUCH_SWALLOW_HOLD)
+            return true
+        }
         flushHeldTouch()
         val contacts = CarPlayTouchMapper.contacts(event, content)
         val queued = controller?.sendTouch(contacts) ?: false
@@ -6614,6 +6626,22 @@ open class CarPlayHostActivity : ComponentActivity() {
             )
         }
         return true
+    }
+
+    /** 记录一次被静默吞掉的触摸；每 [TOUCH_SWALLOW_WINDOW_MILLIS] 汇总一行，便于判断吞在哪一层。 */
+    private fun noteSwallowedTouch(reason: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (touchSwallowWindowStart == 0L) touchSwallowWindowStart = now
+        touchSwallowCounts[reason]++
+        if (now - touchSwallowWindowStart < TOUCH_SWALLOW_WINDOW_MILLIS) return
+        appendLog(
+            "touch swallow menu=${touchSwallowCounts[TOUCH_SWALLOW_MENU]} " +
+                "outside=${touchSwallowCounts[TOUCH_SWALLOW_OUTSIDE]} " +
+                "gesture=${touchSwallowCounts[TOUCH_SWALLOW_GESTURE]} " +
+                "hold=${touchSwallowCounts[TOUCH_SWALLOW_HOLD]}",
+        )
+        touchSwallowCounts.fill(0)
+        touchSwallowWindowStart = now
     }
 
     /** Releases every finger on the iPhone, and drops a touch that has not reached it yet. */
@@ -6982,6 +7010,12 @@ open class CarPlayHostActivity : ComponentActivity() {
         const val SETTINGS_SWIPE_DIRECTION_RATIO = 1.15f
         /** A Galaxy Note20 reported the third finger of a swipe 42 ms after the first. */
         const val SETTINGS_SWIPE_HOLD_MILLIS = 80L
+        const val TOUCH_SWALLOW_REASONS = 4
+        const val TOUCH_SWALLOW_MENU = 0
+        const val TOUCH_SWALLOW_OUTSIDE = 1
+        const val TOUCH_SWALLOW_GESTURE = 2
+        const val TOUCH_SWALLOW_HOLD = 3
+        const val TOUCH_SWALLOW_WINDOW_MILLIS = 5_000L
         const val MAX_SETTINGS_MENU_WIDTH_DP = 720
         const val SWIPE_PANEL_MARGIN_DP = 16
         const val SWIPE_PANEL_RADIUS_DP = 28

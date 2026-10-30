@@ -3,10 +3,12 @@ package com.shilapi.xcertplay.airplay
 import android.util.Log
 import java.io.Closeable
 import java.io.InputStream
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -39,6 +41,8 @@ class ScreenStream(
     private val closed = AtomicBoolean(false)
     private val frameCounter = AtomicLong(0)
     private val firstFrameLogged = AtomicBoolean(false)
+    private val lastDataNanos = AtomicLong(0)
+    private val stallReported = AtomicBoolean(false)
     private var server: ServerSocket? = null
     private var socket: Socket? = null
     private var thread: Thread? = null
@@ -51,6 +55,7 @@ class ScreenStream(
         bound.bind(InetSocketAddress(InetAddress.getByName("::"), 0))
         server = bound
         thread = Thread({ accept(bound) }, "airplay-screen").apply { isDaemon = true; start() }
+        Thread(::watchStall, "airplay-screen-watch").apply { isDaemon = true; start() }
         return bound.localPort
     }
 
@@ -63,11 +68,40 @@ class ScreenStream(
 
     private fun accept(bound: ServerSocket) {
         try {
-            val accepted = bound.acceptFrom(expectedPeer) { onDiagnostic("Video: rejected sender outside the control session") }
+            val accepted = bound.acceptFrom(expectedPeer) { peer ->
+                // 被拒对端的地址族是 IPv4/IPv6 中继错配的主要线索，必须留在日志里。
+                onDiagnostic(
+                    "Video: rejected sender address=${peer?.hostAddress ?: "unknown"} " +
+                        "family=${if (peer is Inet6Address) "IPv6" else "IPv4"}",
+                )
+            }
             socket = accepted
             run(accepted)
         } catch (error: Exception) {
             if (!closed.get()) listener.onClosed(error)
+        }
+    }
+
+    /**
+     * 接收线程阻塞在读上时无人能汇报，这里独立轮询。先只报告，最长静默后结束本流：
+     * 流一关，[Listener.onClosed] 就会关掉会话，DiPlay 随之重连，而不是永久停在最后一帧。
+     * 健康的空闲画面仍会收到保活包，所以长时间零字节只可能是流已经死了。
+     */
+    private fun watchStall() {
+        while (!closed.get()) {
+            if (!runCatching { Thread.sleep(STALL_POLL_MILLIS) }.isSuccess) return
+            val last = lastDataNanos.get()
+            if (last == 0L || closed.get()) continue
+            val idleMs = (System.nanoTime() - last) / 1_000_000L
+            if (idleMs >= STALL_END_MILLIS) {
+                onDiagnostic("Video: stalled no data for ${idleMs / 1000}s; ending the stream so DiPlay reconnects")
+                close()
+                listener.onClosed(TimeoutException("no video data for ${idleMs / 1000}s"))
+                return
+            }
+            if (idleMs >= STALL_IDLE_MILLIS && stallReported.compareAndSet(false, true)) {
+                onDiagnostic("Video: stalled no data for ${idleMs / 1000}s")
+            }
         }
     }
 
@@ -83,6 +117,8 @@ class ScreenStream(
                 if (bodySize > MAX_BODY) break
                 val body = readFully(input, bodySize) ?: break
                 val arrivalNanos = System.nanoTime()
+                lastDataNanos.set(arrivalNanos)
+                stallReported.set(false)
                 stats.received(HEADER_LEN + bodySize)
                 onMessage(header, body, stats, arrivalNanos)
                 stats.processed()
@@ -142,6 +178,9 @@ class ScreenStream(
         const val OP_VIDEO_FRAME = 0
         const val OP_VIDEO_CONFIG = 1
         const val MAX_BODY = 8 * 1024 * 1024
+        const val STALL_POLL_MILLIS = 1_000L
+        const val STALL_IDLE_MILLIS = 5_000L
+        const val STALL_END_MILLIS = 15_000L
     }
 }
 

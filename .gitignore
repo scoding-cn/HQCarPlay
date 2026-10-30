@@ -20,6 +20,8 @@ captures/
 
 # Local agent working notes
 /agent_docs/
+.trae
+specs/
 
 # OS files
 .DS_Store

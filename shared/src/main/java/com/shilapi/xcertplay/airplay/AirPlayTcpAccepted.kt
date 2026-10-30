@@ -25,13 +25,16 @@ internal fun isInternalAirPlayPeer(peer: InetAddress, local: InetAddress): Boole
 /**
  * Accepts until a connection comes from [expected], the control-session peer; others are closed unread.
  * Java reports an IPv4-mapped peer as its IPv4 address and ignores the scope of a link-local one,
- * so a plain address comparison covers the hotspot, Wi-Fi Direct and USB NCM paths.
+ * so a plain address comparison covers the hotspot, Wi-Fi Direct and USB NCM paths: the wired lwIP
+ * bridge connects its relays to 127.0.0.1 (`lwip_ncm_relay.c`), and both the control session and the
+ * data streams arrive from that same address.
  */
 internal fun ServerSocket.acceptFrom(expected: InetAddress, onRejected: (InetAddress?) -> Unit = {}): Socket {
     while (true) {
         val socket = accept()
-        if (socket.inetAddress == expected) return socket
-        onRejected(socket.inetAddress)
+        val peer = socket.inetAddress
+        if (peer == expected) return socket
+        onRejected(peer)
         runCatching { socket.close() }
     }
 }
