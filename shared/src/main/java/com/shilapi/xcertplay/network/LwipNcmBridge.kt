@@ -79,6 +79,55 @@ class LwipNcmBridge(
     val injectedTcpPackets = AtomicInteger(0)
     private var lwipInjectLogBudget = 8
 
+    // 每 5 秒一行汇总，用来区分三条互斥的故障分支：
+    // tcpData≈0 且 bulkFails 增长 -> 出站帧(含 ACK)被丢，iPhone 发送窗口塞死；
+    // tcpData>0 但 inj≈0 -> 包没送进 lwIP；
+    // 速率都正常而 Socket 零字节 -> 本地注入侧堵塞。
+    private val rxFrameCount = AtomicInteger(0)
+    private val controlTcpPackets = AtomicInteger(0)
+    private val dataTcpPackets = AtomicInteger(0)
+    private var diagWindowStartNanos = 0L
+    private var diagPrevRx = 0
+    private var diagPrevControl = 0
+    private var diagPrevData = 0
+    private var diagPrevInjected = 0
+    private var diagPrevStale = 0
+
+    private fun snapshotDiagBaselines() {
+        diagPrevRx = rxFrameCount.get()
+        diagPrevControl = controlTcpPackets.get()
+        diagPrevData = dataTcpPackets.get()
+        diagPrevInjected = injectedTcpPackets.get()
+        diagPrevStale = stalePortTcpPackets.get()
+    }
+
+    private fun maybeLogLwipDiag(nowNanos: Long) {
+        if (diagWindowStartNanos == 0L) {
+            diagWindowStartNanos = nowNanos
+            snapshotDiagBaselines()
+            return
+        }
+        val elapsedMillis = (nowNanos - diagWindowStartNanos) / 1_000_000L
+        if (elapsedMillis < DIAG_INTERVAL_MILLIS) return
+
+        fun rate(delta: Int): Long = if (elapsedMillis <= 0) 0L else delta.toLong() * 1000L / elapsedMillis
+        fun age(lastNanos: Long): String =
+            if (lastNanos == 0L) "none" else "${(nowNanos - lastNanos) / 1_000_000L}ms"
+
+        val msg = "ncm lwip diag dt=${elapsedMillis}ms rx=${rate(rxFrameCount.get() - diagPrevRx)}/s" +
+            " tcp7000=${rate(controlTcpPackets.get() - diagPrevControl)}/s" +
+            " tcpData=${rate(dataTcpPackets.get() - diagPrevData)}/s" +
+            " tcpStale=${rate(stalePortTcpPackets.get() - diagPrevStale)}/s" +
+            " inj=${rate(injectedTcpPackets.get() - diagPrevInjected)}/s" +
+            " txQ=${txQueue.size}/$TX_QUEUE_CAPACITY dropTx=${droppedTxFrames.get()}" +
+            " bulkFails=${ncm.postAcceptWriteFailures.get()}" +
+            " sinceRx=${age(ncm.lastReadOkNanos)} sinceTxOk=${age(ncm.lastWriteOkNanos)}"
+        Log.i(TAG, msg)
+        runCatching { onDebugLog(msg) }
+        diagWindowStartNanos = nowNanos
+        snapshotDiagBaselines()
+    }
+
     @Volatile
     private var lastNaTimeNanos = 0L
     private val running = AtomicBoolean(false)
@@ -167,6 +216,7 @@ class LwipNcmBridge(
     private fun runNcmRx() {
         try {
             while (running.get()) {
+                maybeLogLwipDiag(System.nanoTime())
                 val frame = ncm.recv(READ_TIMEOUT_MILLIS)
                 if (frame == null) {
                     if (peerMac == null) {
@@ -174,6 +224,7 @@ class LwipNcmBridge(
                     }
                     continue
                 }
+                rxFrameCount.incrementAndGet()
 
                 val ipv6 = EthernetIpv6Codec.parseIpv6View(frame) ?: continue
                 peerMac = ipv6.sourceMac
@@ -312,15 +363,21 @@ class LwipNcmBridge(
                     // Issue #270: 上一会话结束后，iPhone 会继续向旧的视频 dataPort 发 TCP，
                     // 而此时没有监听器。统计这些包，便于在重连失败日志里判断是否是残留流量
                     // 淹没了发往 7000 的新 SYN。
-                    if (ipv6.payloadLength >= 44 && registeredTcpPorts.isNotEmpty()) {
+                    if (ipv6.payloadLength >= 44) {
                         val dstPort = ((frame[ipv6.payloadOffset + 42].toInt() and 0xff) shl 8) or
                             (frame[ipv6.payloadOffset + 43].toInt() and 0xff)
-                        if (dstPort !in registeredTcpPorts) {
-                            val stale = stalePortTcpPackets.incrementAndGet()
-                            if (stalePortLogBudget > 0) {
-                                stalePortLogBudget--
-                                runCatching {
-                                    onDebugLog("ncm stale-session tcp dstPort=$dstPort count=$stale (no listener this session)")
+                        if (dstPort == CARPLAY_CONTROL_PORT) {
+                            controlTcpPackets.incrementAndGet()
+                        } else if (registeredTcpPorts.isNotEmpty()) {
+                            if (dstPort in registeredTcpPorts) {
+                                dataTcpPackets.incrementAndGet()
+                            } else {
+                                val stale = stalePortTcpPackets.incrementAndGet()
+                                if (stalePortLogBudget > 0) {
+                                    stalePortLogBudget--
+                                    runCatching {
+                                        onDebugLog("ncm stale-session tcp dstPort=$dstPort count=$stale (no listener this session)")
+                                    }
                                 }
                             }
                         }
@@ -470,6 +527,10 @@ class LwipNcmBridge(
         const val NA_RETRY_INTERVAL_NANOS = 500_000_000L
         const val TX_QUEUE_CAPACITY = 64
         const val TX_POLL_MILLIS = 200L
+        /** 汇总行的输出周期；一次车测约 12 行，足够看出趋势。 */
+        const val DIAG_INTERVAL_MILLIS = 5_000L
+        /** AirPlay 控制面固定监听端口，用于把 TCP 流量分成控制面与视频数据面两桶。 */
+        const val CARPLAY_CONTROL_PORT = 7000
         /** Emit the mDNS diagnostic summary after every N answered/unmatched queries (#262). */
         const val MDNS_DIAG_LOG_EVERY = 5
     }

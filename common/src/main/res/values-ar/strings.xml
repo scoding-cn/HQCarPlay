@@ -964,6 +964,14 @@
     <string name="connection_help_existing_wifi">تأكد من اتصال وحدة السيارة وiPhone بشبكة Wi-Fi نفسها وأن اسمها وكلمة مرورها يطابقان إعدادات DiPlay، ثم أعد المحاولة.</string>
     <string name="settings_report_on_phone">الحصول على التقرير عبر هاتف</string>
     <string name="settings_report_on_phone_hint">امسح الرمز بكاميرا الهاتف لفتح هذه الصفحة في متصفحه، ثم اختر «تنزيل التقرير». أبقِ هذه الشاشة مفتوحة حتى يكتمل التنزيل.</string>
+    <string name="settings_report_direct_hint">شبكة Wi-Fi الخاصة بالسيارة معزولة ولا يمكن للهاتف الوصول إليها، لذا يستخدم التقرير اتصالًا مباشرًا. شغّله ثم امسح الرمز أدناه بالهاتف.</string>
+    <string name="settings_report_direct_start">تشغيل الاتصال المباشر</string>
+    <string name="settings_report_direct_starting">يجري تجهيز الاتصال المباشر…</string>
+    <string name="settings_report_direct_join">انضم على الهاتف إلى الشبكة “%1$s”. الرمز أدناه ينضم إليها تلقائيًا.</string>
+    <string name="settings_report_direct_password">كلمة مرور الشبكة: %1$s</string>
+    <string name="settings_report_direct_preparing">يجري تجهيز العنوان. أبقِ هذه الشاشة مفتوحة.</string>
+    <string name="settings_report_direct_permission">اسمح بالوصول إلى Wi-Fi القريب حتى يتمكن DiPlay من تشغيل الاتصال المباشر.</string>
+    <string name="settings_report_direct_failed">لم يبدأ الاتصال المباشر. شغّل Wi-Fi وأنهِ CarPlay اللاسلكي ثم أعد المحاولة.</string>
     <string name="settings_mfi_target_description">اختر USB/CH341 فقط عندما يكون محوّل مصادقة CH341 متصلًا بوحدة الوسائط. بدونه، اختر «محلي دون اتصال». يُطبَّق عند الاتصال التالي.</string>
     <string name="settings_call_speakerphone">المكالمات عبر مكبّر الصوت</string>
     <string name="settings_call_speakerphone_description">لهاتف أو جهاز لوحي بنظام Android يُستخدم كوحدة وسائط: يشغّل مكالمات CarPlay عبر مكبّر الصوت بدلًا من سمّاعة الأذن ويستخدم ميكروفون التحدث الحر. اتركه متوقفًا في وحدة وسائط السيارة. يُطبَّق من المكالمة التالية.</string>

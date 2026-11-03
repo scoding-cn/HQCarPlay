@@ -76,6 +76,14 @@ class ScreenStream(
                 )
             }
             socket = accepted
+            // 视频流断了但没看到重连时，分辨「iPhone 压根没连」和「连上了却零字节」全靠这一行。
+            runCatching {
+                onDiagnostic(
+                    "Video: data connection accepted peer=${accepted.inetAddress?.hostAddress ?: "unknown"}" +
+                        ":${accepted.port} localPort=${accepted.localPort}" +
+                        " family=${if (accepted.inetAddress is Inet6Address) "IPv6" else "IPv4"}",
+                )
+            }
             run(accepted)
         } catch (error: Exception) {
             if (!closed.get()) listener.onClosed(error)

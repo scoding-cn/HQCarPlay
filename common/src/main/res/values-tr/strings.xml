@@ -949,6 +949,14 @@
     <string name="connection_help_existing_wifi">Ana ünitenin ve iPhone\'un aynı Wi-Fi ağında olduğundan ve adının ve parolasının DiPlay ayarlarıyla eşleştiğinden emin olun, ardından tekrar deneyin.</string>
     <string name="settings_report_on_phone">Raporu telefondan alın</string>
     <string name="settings_report_on_phone_hint">Bu sayfayı tarayıcısında açmak için telefon kamerasıyla kodu tarayın, ardından Raporu indir\'i seçin. İndirme bitene kadar bu ekranı açık tutun.</string>
+    <string name="settings_report_direct_hint">Aracın kendi Wi-Fi ağı yalıtılmıştır ve telefon ona erişemez, bu yüzden rapor doğrudan bağlantı kullanır. Açın ve aşağıdaki kodu telefonla tarayın.</string>
+    <string name="settings_report_direct_start">Doğrudan bağlantıyı aç</string>
+    <string name="settings_report_direct_starting">Doğrudan bağlantı hazırlanıyor…</string>
+    <string name="settings_report_direct_join">Telefonda “%1$s” ağına katılın. Aşağıdaki kod otomatik olarak katılır.</string>
+    <string name="settings_report_direct_password">Ağ parolası: %1$s</string>
+    <string name="settings_report_direct_preparing">Adres hazırlanıyor. Bu ekranı açık tutun.</string>
+    <string name="settings_report_direct_permission">DiPlay\'in doğrudan bağlantıyı başlatabilmesi için yakındaki Wi-Fi erişimine izin verin.</string>
+    <string name="settings_report_direct_failed">Doğrudan bağlantı başlatılamadı. Wi-Fi\'yi açın, kablosuz CarPlay\'i sonlandırın ve yeniden deneyin.</string>
     <string name="settings_mfi_target_description">Yalnızca ana üniteye bir CH341 kimlik doğrulama adaptörü bağlıyken USB/CH341\'i seçin. Adaptör yoksa Yerel çevrimdışı\'nı seçin. Sonraki bağlantıda geçerli olur.</string>
     <string name="settings_call_speakerphone">Hoparlörden aramalar</string>
     <string name="settings_call_speakerphone_description">Ana ünite olarak kullanılan bir Android telefon veya tablet içindir: CarPlay aramalarını ahize yerine hoparlörden oynatır ve eller serbest mikrofonunu kullanır. Araç ana ünitesinde kapalı bırakın. Sonraki aramadan itibaren geçerli olur.</string>

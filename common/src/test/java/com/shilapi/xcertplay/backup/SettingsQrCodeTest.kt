@@ -27,4 +27,16 @@ class SettingsQrCodeTest {
         }
         assertTrue(black > 100)
     }
+
+    @Test
+    fun aWifiCodeNamesTheNetworkAndItsKey() {
+        assertEquals("WIFI:T:WPA;S:DiPlay;P:12345678;;", SettingsQrCode.wifiJoinPayload("DiPlay", "12345678"))
+    }
+
+    // A semicolon in a passphrase would end the field and leave the phone asking for a second one.
+    @Test
+    fun aWifiCodeEscapesTheCharactersThatEndAField() {
+        val payload = SettingsQrCode.wifiJoinPayload("DiPlay;5GHz", "a,b:c\\d")
+        assertEquals("WIFI:T:WPA;S:DiPlay\\;5GHz;P:a\\,b\\:c\\\\d;;", payload)
+    }
 }

@@ -927,6 +927,14 @@
     <string name="connection_help_existing_wifi">Переконайтеся, що головний пристрій та iPhone підключені до однієї мережі Wi-Fi, а її назва й пароль збігаються з налаштуваннями DiPlay, і повторіть спробу.</string>
     <string name="settings_report_on_phone">Отримати звіт на телефоні</string>
     <string name="settings_report_on_phone_hint">Відскануйте код камерою телефона, щоб відкрити сторінку в його браузері, і виберіть «Завантажити звіт». Не закривайте цей екран, доки завантаження не завершиться.</string>
+    <string name="settings_report_direct_hint">Wi-Fi автомобіля ізольований, і телефон не може до нього підключитися, тому звіт використовує пряме з\'єднання. Увімкніть його й скануйте код нижче телефоном.</string>
+    <string name="settings_report_direct_start">Увімкнути пряме з\'єднання</string>
+    <string name="settings_report_direct_starting">Підготовка прямого з\'єднання…</string>
+    <string name="settings_report_direct_join">На телефоні підключіться до мережі «%1$s». Код нижче підключає автоматично.</string>
+    <string name="settings_report_direct_password">Пароль мережі: %1$s</string>
+    <string name="settings_report_direct_preparing">Підготовка адреси. Не закривайте цей екран.</string>
+    <string name="settings_report_direct_permission">Дозвольте доступ до найближчого Wi-Fi, щоб DiPlay увімкнув пряме з\'єднання.</string>
+    <string name="settings_report_direct_failed">Пряме з\'єднання не запустилося. Увімкніть Wi-Fi, завершіть бездротовий CarPlay і повторіть.</string>
     <string name="settings_mfi_target_description">Обирайте USB/CH341, лише коли до головного пристрою підключено адаптер автентифікації CH341. Без нього оберіть «Локально, без мережі». Застосовується під час наступного підключення.</string>
     <string name="settings_call_speakerphone">Дзвінки через гучномовець</string>
     <string name="settings_call_speakerphone_description">Для телефона або планшета Android, який використовується як головний пристрій: дзвінки CarPlay звучать із гучномовця, а не з розмовного динаміка, і використовується мікрофон гучного зв’язку. На головному пристрої автомобіля залиште вимкненим. Застосовується з наступного дзвінка.</string>

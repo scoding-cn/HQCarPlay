@@ -12,6 +12,17 @@ import kotlin.math.sqrt
 
 /** Renders backup URLs as QR codes on a rounded card. */
 object SettingsQrCode {
+    /**
+     * The payload a phone camera reads as "join this network". iOS and Android both offer the join
+     * prompt for it, so the driver does not have to type an SSID and a passphrase on the phone.
+     */
+    fun wifiJoinPayload(ssid: String, passphrase: String): String =
+        "WIFI:T:WPA;S:${escape(ssid)};P:${escape(passphrase)};;"
+
+    /** Backslash first: escaping it after the others would escape the escapes it added. */
+    private fun escape(value: String): String =
+        value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace(":", "\\:")
+
     fun encode(content: String, sizePx: Int): Bitmap {
         val matrix = QRCodeWriter().encode(
             content,

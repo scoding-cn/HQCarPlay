@@ -41,7 +41,9 @@
 
 #define LWIP_TCP                        1
 #define TCP_MSS                         1440
-#define TCP_WND                         (32 * 1024)
+// 43 个 MSS(1440) 的整数倍且不超过 65535，无需开启 LWIP_WND_SCALE。
+// 32KB 窗口在 RTT 恶化时吞吐上限只剩约 1.3Mbps，撑不住 AirPlay 视频的 28Mbps。
+#define TCP_WND                         61920
 #define TCP_SND_BUF                     (32 * 1024)
 #define TCP_SND_QUEUELEN                64
 #define TCP_LISTEN_BACKLOG              1

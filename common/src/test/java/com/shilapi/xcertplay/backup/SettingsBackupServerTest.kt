@@ -475,4 +475,25 @@ class SettingsBackupServerTest {
         assertEquals(3, SettingsBackupServer.rank("wlan1", "p2p"))
         assertEquals(4, SettingsBackupServer.rank("rmnet_data0", "p2p"))
     }
+
+    // The diagnostic page must offer the direct group's address only: the car's Wi-Fi stays isolated.
+    @Test
+    fun selectOnKeepsOnlyTheGroupInterface() {
+        val interfaces = listOf(
+            "wlan0" to "192.168.1.20",
+            "p2p0" to "192.168.49.1",
+            "p2p-wlan0-0" to "192.168.49.2",
+            "ap0" to "192.168.43.1",
+            "rmnet_data0" to "10.1.2.3",
+        )
+        assertEquals(listOf("192.168.49.1", "192.168.49.2"), SettingsBackupServer.selectOn(interfaces, "p2p"))
+        assertEquals(listOf("192.168.43.1"), SettingsBackupServer.selectOn(interfaces, "ap"))
+        assertEquals(emptyList<String>(), SettingsBackupServer.selectOn(interfaces, "eth"))
+    }
+
+    @Test
+    fun selectOnReportsOneAddressOnceWhenAnInterfaceListsItTwice() {
+        val interfaces = listOf("p2p0" to "192.168.49.1", "p2p0" to "192.168.49.1")
+        assertEquals(listOf("192.168.49.1"), SettingsBackupServer.selectOn(interfaces, "p2p"))
+    }
 }

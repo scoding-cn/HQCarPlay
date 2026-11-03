@@ -283,20 +283,36 @@ class SettingsBackupServer(
         /** Short, the same four keys, and no browser refuses it. Unprivileged apps cannot use 80. */
         const val TYPED_PORT = 8888
 
-        fun addressCandidates(preferredPrefix: String? = null): List<String> = runCatching {
+        private fun interfaceAddresses(): List<Pair<String, String>> = runCatching {
             NetworkInterface.getNetworkInterfaces().toList().asSequence()
                 .filter { it.isUp && !it.isLoopback && !it.isVirtual }
-                .flatMap { iface -> iface.inetAddresses.toList().asSequence().map { iface to it } }
+                .flatMap { iface -> iface.inetAddresses.toList().asSequence().map { iface.name to it } }
                 .filter { (_, address) ->
                     address is Inet4Address && !address.isLoopbackAddress && !address.isLinkLocalAddress
                 }
-                .map { (iface, address) -> rank(iface.name, preferredPrefix) to (address as Inet4Address).hostAddress }
-                .filter { it.second != null }
-                .sortedBy { it.first }
-                .map { it.second!! }
-                .distinct()
+                .map { (name, address) -> name to (address as Inet4Address).hostAddress }
                 .toList()
         }.getOrDefault(emptyList())
+
+        fun addressCandidates(preferredPrefix: String? = null): List<String> =
+            interfaceAddresses()
+                .sortedBy { (name, _) -> rank(name, preferredPrefix) }
+                .map { it.second }
+                .distinct()
+
+        /**
+         * IPv4 addresses on interfaces whose name starts with [prefix]. The diagnostic Wi-Fi
+         * Direct link lives on `p2p0`, and no other interface may stand in for it: a phone joins
+         * that group only, so the car's ordinary Wi-Fi address would not answer it.
+         */
+        fun addressesOn(prefix: String): List<String> = selectOn(interfaceAddresses(), prefix)
+
+        /** Some ROMs name the group interface `p2p-wlan0-0`, so the prefix test is the whole rule. */
+        internal fun selectOn(interfaces: List<Pair<String, String>>, prefix: String): List<String> =
+            interfaces
+                .filter { (name, _) -> name.startsWith(prefix) }
+                .map { it.second }
+                .distinct()
 
         internal fun rank(name: String, preferredPrefix: String?): Int = when {
             preferredPrefix != null && name.startsWith(preferredPrefix) -> 0

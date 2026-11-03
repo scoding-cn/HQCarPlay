@@ -983,6 +983,14 @@
     <string name="connection_help_existing_wifi">헤드 유닛과 iPhone이 같은 Wi-Fi 네트워크에 연결되어 있고, 네트워크 이름과 비밀번호가 DiPlay 설정과 일치하는지 확인한 뒤 다시 시도하세요.</string>
     <string name="settings_report_on_phone">휴대전화에서 보고서 받기</string>
     <string name="settings_report_on_phone_hint">휴대전화 카메라로 코드를 스캔해 브라우저에서 이 페이지를 연 다음 보고서 다운로드를 선택하세요. 다운로드가 끝날 때까지 이 화면을 열어 두세요.</string>
+    <string name="settings_report_direct_hint">차량의 Wi-Fi는 격리되어 휴대전화가 접근할 수 없으므로 보고서는 직접 연결을 사용합니다. 연결을 켠 뒤 아래 코드를 휴대전화로 스캔하세요.</string>
+    <string name="settings_report_direct_start">직접 연결 켜기</string>
+    <string name="settings_report_direct_starting">직접 연결을 준비하는 중…</string>
+    <string name="settings_report_direct_join">휴대전화에서 “%1$s” 네트워크에 연결하세요. 아래 코드를 스캔하면 자동으로 연결됩니다.</string>
+    <string name="settings_report_direct_password">네트워크 비밀번호: %1$s</string>
+    <string name="settings_report_direct_preparing">주소를 준비하는 중입니다. 이 화면을 열어 두세요.</string>
+    <string name="settings_report_direct_permission">DiPlay가 직접 연결을 시작할 수 있도록 근처 Wi-Fi 접근을 허용하세요.</string>
+    <string name="settings_report_direct_failed">직접 연결을 시작하지 못했습니다. Wi-Fi를 켜고 무선 CarPlay를 종료한 뒤 다시 시도하세요.</string>
     <string name="settings_mfi_target_description">CH341 인증 어댑터가 헤드 유닛에 연결된 경우에만 USB/CH341을 선택하세요. 어댑터가 없으면 로컬 오프라인을 선택하세요. 다음 연결부터 적용됩니다.</string>
     <string name="settings_call_speakerphone">스피커폰으로 통화</string>
     <string name="settings_call_speakerphone_description">헤드 유닛으로 사용하는 Android 휴대전화 또는 태블릿용 설정입니다. CarPlay 통화를 수화부 대신 스피커로 재생하고 핸즈프리 마이크를 사용합니다. 차량 헤드 유닛에서는 끄세요. 다음 통화부터 적용됩니다.</string>

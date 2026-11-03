@@ -915,6 +915,14 @@
     <string name="connection_help_existing_wifi">Убедитесь, что головное устройство и iPhone подключены к одной сети Wi-Fi, а её имя и пароль совпадают с настройками DiPlay, и повторите попытку.</string>
     <string name="settings_report_on_phone">Получить отчёт на телефоне</string>
     <string name="settings_report_on_phone_hint">Отсканируйте код камерой телефона, чтобы открыть страницу в его браузере, и выберите «Скачать отчёт». Не закрывайте этот экран, пока загрузка не завершится.</string>
+    <string name="settings_report_direct_hint">Wi-Fi автомобиля изолирован, и телефон не может к нему подключиться, поэтому отчёт использует прямое соединение. Включите его и сканируйте код ниже телефоном.</string>
+    <string name="settings_report_direct_start">Включить прямое соединение</string>
+    <string name="settings_report_direct_starting">Подготовка прямого соединения…</string>
+    <string name="settings_report_direct_join">На телефоне подключитесь к сети «%1$s». Код ниже подключает автоматически.</string>
+    <string name="settings_report_direct_password">Пароль сети: %1$s</string>
+    <string name="settings_report_direct_preparing">Подготовка адреса. Не закрывайте этот экран.</string>
+    <string name="settings_report_direct_permission">Разрешите доступ к ближайшему Wi-Fi, чтобы DiPlay включил прямое соединение.</string>
+    <string name="settings_report_direct_failed">Прямое соединение не запустилось. Включите Wi-Fi, завершите беспроводной CarPlay и повторите.</string>
     <string name="settings_mfi_target_description">Выбирайте USB/CH341, только если к головному устройству подключён адаптер аутентификации CH341. Без него выберите «Локальный офлайн». Применяется при следующем подключении.</string>
     <string name="settings_call_speakerphone">Звонки через громкоговоритель</string>
     <string name="settings_call_speakerphone_description">Для телефона или планшета Android, используемого как головное устройство: звонки CarPlay звучат из громкоговорителя, а не из разговорного динамика, и используется микрофон громкой связи. На головном устройстве автомобиля оставьте выключенным. Применяется со следующего звонка.</string>

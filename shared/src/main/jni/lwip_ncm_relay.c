@@ -29,7 +29,12 @@
 
 #define MAX_RELAY_CONNS 32
 #define MAX_UDP_RELAYS 32
-#define BUFFER_SIZE 16384
+// 手机→本地方向的接收缓冲必须覆盖整个 TCP_WND(61920)。缓冲小于窗口时，
+// 窗口内的突发放不下，tcp_relay_recv 只能返回 ERR_MEM，报文停在 lwIP 的
+// refused_data 里继续占用接收窗口，窗口随之塌缩；iPhone 把这当成链路拥塞，
+// 拥塞窗口逐级降到 1 MSS 后 AirPlay 码率跌到地板并停发。
+// 只要缓冲不小于 TCP_WND，未确认字节数就不会超过缓冲容量，ERR_MEM 不再可能出现。
+#define BUFFER_SIZE 65536
 
 // NO_SYS 模式下 lwIP 的堆、PCB 链表和循环定时器都是进程级全局状态，
 // 为新的 USB 会话重新 lwip_init() 会破坏 next_timeout 等全局链。

@@ -79,6 +79,9 @@ import com.shilapi.xcertplay.network.CarHotspotConfigWrite
 import com.shilapi.xcertplay.network.CarHotspotSavedCredentials
 import com.shilapi.xcertplay.network.CarHotspotSettings
 import com.shilapi.xcertplay.network.CarHotspotTethering
+import com.shilapi.xcertplay.network.DiagnosticP2pCredentials
+import com.shilapi.xcertplay.network.DiagnosticP2pGroup
+import com.shilapi.xcertplay.network.DiagnosticP2pPermissionException
 import com.shilapi.xcertplay.network.HotspotCredentials
 import com.shilapi.xcertplay.network.WifiP2pChannels
 import com.shilapi.xcertplay.orchestration.ManualHotspotProvisioning
@@ -255,6 +258,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     @Volatile private var backupEndpoint: SettingsBackupEndpoint? = null
     /** The Settings category that opened the phone page, and the one to go back to. */
     private var backupOpenedFrom = SettingsCategory.ABOUT
+    /** The Wi-Fi Direct group that lets a phone read the report, once the driver asks for it. */
+    @Volatile private var diagnosticP2p: DiagnosticP2pGroup? = null
+    @Volatile private var diagnosticP2pCredentials: DiagnosticP2pCredentials? = null
+    @Volatile private var diagnosticP2pRunning = false
+    private var diagnosticP2pFailure: String? = null
     @Volatile private var backupSummary: String? = null
     @Volatile private var updateGeneration = 0
     @Volatile private var updateProgress: Int? = null
@@ -350,6 +358,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     // A denial still saves the report, only in DiPlay's own storage.
     private val reportStoragePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         exportDiagnostics()
+    }
+    private val nearbyWifiPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted.values.all { it }) {
+            startDiagnosticP2p()
+        } else {
+            diagnosticP2pFailure = getString(R.string.settings_report_direct_permission)
+            render()
+        }
     }
 
     private var languagePreferenceAtCreate = AppLocale.SYSTEM
@@ -658,8 +674,11 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         applyWindowAppearance()
         // A pending assignment belongs to the widgets being replaced, never to another page.
         if (!appearanceOnly) cancelKeyLearning()
-        // The backup server lives only while its page is shown, however the driver left it.
-        if (page != "backup" && backupServer != null) stopBackupServer()
+        // The backup server and the direct group live only while their page is shown, however
+        // the driver left it: a group left behind keeps the radio busy for the next CarPlay start.
+        if (page != "backup" && (backupServer != null || diagnosticP2p != null || diagnosticP2pRunning)) {
+            stopBackupServer()
+        }
         val focusSnapshot = if (appearanceOnly) {
             currentFocus?.let { focused ->
                 FocusSnapshot(
@@ -2542,15 +2561,28 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun backup(content: LinearLayout) {
+        // The same page serves both; opened from Diagnostics, it says what the driver came for.
+        val forReport = backupOpenedFrom == SettingsCategory.DIAGNOSTICS
         val preferredPrefix = when (AirPlayPersistence.loadWirelessHotspotMode(this)) {
             WirelessHotspotMode.WIFI_P2P -> "p2p"
             WirelessHotspotMode.LOCAL_ONLY_HOTSPOT -> "ap"
             WirelessHotspotMode.MANUAL, WirelessHotspotMode.EXISTING_WIFI -> "wlan"
         }
-        val addresses = SettingsBackupServer.addressCandidates(preferredPrefix)
-        // The same page serves both; opened from Diagnostics, it says what the driver came for.
-        val forReport = backupOpenedFrom == SettingsCategory.DIAGNOSTICS
         content.addView(label(getString(if (forReport) R.string.settings_report_on_phone else R.string.backup_title), 40, TEXT, true))
+        if (forReport) {
+            content.addView(space(SETTINGS_BLOCK_GAP_DP))
+            content.addView(diagnosticLinkCard())
+            // A phone reaches the car only through the direct group: the car's own Wi-Fi is isolated.
+            if (diagnosticP2pCredentials == null) return
+        }
+        // Only the direct group answers a phone, even when the car has other network interfaces.
+        val addresses = if (forReport) SettingsBackupServer.addressesOn(P2P_INTERFACE_PREFIX)
+        else SettingsBackupServer.addressCandidates(preferredPrefix)
+        if (forReport && addresses.isEmpty()) {
+            content.addView(space(SETTINGS_BLOCK_GAP_DP))
+            content.addView(label(getString(R.string.settings_report_direct_preparing), 16, MUTED))
+            return
+        }
         var endpoint = backupEndpoint
         if ((backupServer == null || endpoint == null) && addresses.isEmpty()) {
             content.addView(space(SETTINGS_BLOCK_GAP_DP))
@@ -2639,6 +2671,127 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         backupServer = null
         backupEndpoint = null
         backupSummary = null
+        stopDiagnosticP2p()
+    }
+
+    /** The card that turns on the direct Wi-Fi link the phone uses to read the report. */
+    private fun diagnosticLinkCard(): View = card().apply {
+        addView(label(getString(R.string.settings_report_direct_hint), 16, MUTED))
+        val credentials = diagnosticP2pCredentials
+        when {
+            diagnosticP2pRunning -> addView(label(getString(R.string.settings_report_direct_starting), 15, MUTED)
+                .apply { setPadding(0, dp(12), 0, 0) })
+            credentials != null -> {
+                addView(label(getString(R.string.settings_report_direct_join, credentials.ssid), 15, TEXT)
+                    .apply { setPadding(0, dp(12), 0, 0) })
+                addView(label(getString(R.string.settings_report_direct_password, credentials.passphrase), 15, TEXT)
+                    .apply { setPadding(0, dp(8), 0, 0) })
+                val side = dp(200)
+                addView(ImageView(this@DiPlayActivity).apply {
+                    // Scanning joins the network; the address below then opens the report.
+                    setImageBitmap(SettingsQrCode.encode(
+                        SettingsQrCode.wifiJoinPayload(credentials.ssid, credentials.passphrase), side))
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                }, LinearLayout.LayoutParams(side + dp(16), side + dp(16)).apply {
+                    topMargin = dp(SETTINGS_BLOCK_GAP_DP)
+                    gravity = Gravity.CENTER_HORIZONTAL
+                })
+            }
+            else -> {
+                addView(button(getString(R.string.settings_report_direct_start), false) { startDiagnosticP2p() },
+                    matchButton(if (diagnosticP2pFailure == null) 0 else 12, 56))
+                diagnosticP2pFailure?.let {
+                    addView(label(it, 15, MUTED).apply { setPadding(0, dp(12), 0, 0) })
+                }
+            }
+        }
+    }
+
+    private fun startDiagnosticP2p() {
+        if (page != "backup" || isFinishing || isDestroyed) return
+        if (diagnosticP2pRunning || diagnosticP2pCredentials != null) return
+        if (!p2pPermissionGranted()) {
+            nearbyWifiPermission.launch(p2pPermissions())
+            return
+        }
+        diagnosticP2pRunning = true
+        diagnosticP2pFailure = null
+        render()
+        Thread({
+            val group = DiagnosticP2pGroup(applicationContext) { Log.i("DiPlayP2p", "diagnostic $it") }
+            val result = runCatching { group.start(DIAGNOSTIC_P2P_TIMEOUT_MILLIS) }
+            runOnUiThread {
+                // The page left while the group was being created: keep nothing behind.
+                if (isFinishing || isDestroyed || !diagnosticP2pRunning) {
+                    diagnosticP2pRunning = false
+                    closeDiagnosticGroupInBackground(group)
+                    return@runOnUiThread
+                }
+                diagnosticP2pRunning = false
+                result.onSuccess { credentials ->
+                    diagnosticP2p = group
+                    diagnosticP2pCredentials = credentials
+                    awaitDiagnosticP2pAddress(P2P_ADDRESS_RETRIES)
+                }.onFailure { failure ->
+                    // Removal blocks on the framework for seconds: never on the main thread.
+                    closeDiagnosticGroupInBackground(group)
+                    diagnosticP2pFailure = getString(
+                        if (failure is DiagnosticP2pPermissionException) R.string.settings_report_direct_permission
+                        else R.string.settings_report_direct_failed)
+                    render()
+                }
+            }
+        }, "diplay-diagnostic-p2p-start").start()
+    }
+
+    private fun p2pPermissionGranted(): Boolean {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            Manifest.permission.NEARBY_WIFI_DEVICES else Manifest.permission.ACCESS_FINE_LOCATION
+        return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun p2pPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES)
+    } else {
+        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+
+    /** The interface address trails the group by a moment; rendering reads it again each try. */
+    private fun awaitDiagnosticP2pAddress(remaining: Int) {
+        if (SettingsBackupServer.addressesOn(P2P_INTERFACE_PREFIX).isNotEmpty()) {
+            render()
+            return
+        }
+        if (remaining <= 0) {
+            // The group exists but no address ever came: release it and let the driver retry,
+            // rather than leaving a group that nothing on the phone can reach.
+            stopDiagnosticP2p()
+            diagnosticP2pFailure = getString(R.string.settings_report_direct_failed)
+            render()
+            return
+        }
+        handler.postDelayed({
+            // Left the page in the meantime: the group is already closed and nothing waits for it.
+            if (page != "backup" || isFinishing || isDestroyed) return@postDelayed
+            awaitDiagnosticP2pAddress(remaining - 1)
+        }, P2P_ADDRESS_POLL_MILLIS)
+    }
+
+    /**
+     * Closes the group off the main thread: removal blocks on the framework. A group that wireless
+     * CarPlay already owned is left running, so closing this page never drops a session.
+     */
+    private fun stopDiagnosticP2p() {
+        val group = diagnosticP2p
+        diagnosticP2p = null
+        diagnosticP2pCredentials = null
+        diagnosticP2pFailure = null
+        diagnosticP2pRunning = false
+        if (group != null) closeDiagnosticGroupInBackground(group)
+    }
+
+    private fun closeDiagnosticGroupInBackground(group: DiagnosticP2pGroup) {
+        Thread({ runCatching { group.close() } }, "diplay-diagnostic-p2p-stop").start()
     }
 
     private fun backupPageHtml(): ByteArray = assets.open("settings-backup.html").use { it.readBytes() }
@@ -7005,5 +7158,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         private const val SETTINGS_CONTROL_INSET_DP = 16
         /** Gap under an explanatory note, so it never touches the next control. */
         private const val SETTINGS_NOTE_GAP_DP = 12
+        /** The interface the diagnostic Wi-Fi Direct group owns; only its address answers a phone. */
+        private const val P2P_INTERFACE_PREFIX = "p2p"
+        private const val DIAGNOSTIC_P2P_TIMEOUT_MILLIS = 20_000L
+        private const val P2P_ADDRESS_RETRIES = 10
+        private const val P2P_ADDRESS_POLL_MILLIS = 500L
     }
 }

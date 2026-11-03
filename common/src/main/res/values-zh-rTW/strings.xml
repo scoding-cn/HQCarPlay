@@ -975,6 +975,14 @@
     <string name="connection_help_existing_wifi">請確認車機和 iPhone 連線的是同一個 Wi-Fi 網路，且網路名稱和密碼與 DiPlay 設定相同，再重試。</string>
     <string name="settings_report_on_phone">在手機上取得報告</string>
     <string name="settings_report_on_phone_hint">用手機相機掃碼，在瀏覽器中開啟此頁面，然後選擇「下載報告」。下載完成前請保持此畫面開啟。</string>
+    <string name="settings_report_direct_hint">車機內建的 Wi-Fi 無法被手機存取，報告改用直連方式。開啟直連後，用手機掃描下方 QR 碼。</string>
+    <string name="settings_report_direct_start">開啟直連</string>
+    <string name="settings_report_direct_starting">正在準備直連…</string>
+    <string name="settings_report_direct_join">請在手機上加入網路「%1$s」。掃描下方 QR 碼可自動加入。</string>
+    <string name="settings_report_direct_password">網路密碼：%1$s</string>
+    <string name="settings_report_direct_preparing">正在取得位址，請保持此頁面開啟。</string>
+    <string name="settings_report_direct_permission">請允許「鄰近的 Wi-Fi」權限，DiPlay 才能開啟直連。</string>
+    <string name="settings_report_direct_failed">直連未能啟動。請開啟 Wi-Fi、結束無線 CarPlay 後重試。</string>
     <string name="settings_mfi_target_description">只有車機上插著 CH341 認證轉接器時才選擇 USB/CH341。沒有轉接器時請選擇「本機離線」。下次連線時生效。</string>
     <string name="settings_call_speakerphone">通話使用揚聲器</string>
     <string name="settings_call_speakerphone_description">適用於當作車機的 Android 手機或平板：CarPlay 通話從揚聲器播放而不是聽筒，並使用免持麥克風。車機上請保持關閉。從下一次通話開始生效。</string>

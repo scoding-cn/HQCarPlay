@@ -12,6 +12,7 @@ import java.nio.ByteBuffer
 import java.util.ArrayDeque
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A blocking NCM data pipe that moves Ethernet frames as NTB16 blocks over bulk endpoints.
@@ -43,6 +44,18 @@ class NcmUsbBridge internal constructor(
 
     /** [System.nanoTime] when the iPhone first took a frame on bulk OUT, or null while it still NAKs the pipe. */
     @Volatile var linkOpenedAtNanos: Long? = null
+        private set
+
+    // 链路已建立后的写失败次数。视频 TCP 速率同时归零时，它说明出站帧(含 ACK)被静默丢弃，
+    // iPhone 的发送窗口随之塞死；与「iPhone 本身不再发」区分开靠的就是这个计数。
+    val postAcceptWriteFailures = AtomicInteger(0)
+
+    /** [System.nanoTime] of the last frame the phone accepted on bulk OUT, or 0 before the first one. */
+    @Volatile var lastWriteOkNanos = 0L
+        private set
+
+    /** [System.nanoTime] of the last frame read from bulk IN, or 0 before the first one. */
+    @Volatile var lastReadOkNanos = 0L
         private set
     private val frames = ArrayDeque<ByteArray>()
     private var queuedBytes = 0
@@ -97,7 +110,11 @@ class NcmUsbBridge internal constructor(
         // Before StartCarPlaySession the phone keeps the NCM data path NAKed. Android reports the
         // resulting timeout as -1; it is not a detach and later packets must be allowed to retry.
         if (transferred <= 0) {
-            if (!bulkOutAccepted) notReadyFrames++
+            if (bulkOutAccepted) {
+                postAcceptWriteFailures.incrementAndGet()
+            } else {
+                notReadyFrames++
+            }
             if (!loggedWriteTimeout) {
                 loggedWriteTimeout = true
                 Log.i(IphoneCarPlayConfiguration.TAG, "ncm bulk-out not ready; retaining bridge for retry")
@@ -115,6 +132,7 @@ class NcmUsbBridge internal constructor(
             )
         }
         traffic.sent()
+        lastWriteOkNanos = System.nanoTime()
         if (loggedWriteTimeout) {
             loggedWriteTimeout = false
             Log.i(IphoneCarPlayConfiguration.TAG, "ncm bulk-out became ready")
@@ -317,6 +335,7 @@ class NcmUsbBridge internal constructor(
         val frame = frames.removeFirst()
         queuedBytes -= frame.size
         traffic.received(frame)
+        lastReadOkNanos = System.nanoTime()
         return frame
     }
 

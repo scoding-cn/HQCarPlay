@@ -915,6 +915,14 @@
     <string name="connection_help_existing_wifi">Comprueba que la unidad y el iPhone estén en la misma red Wi-Fi y que su nombre y contraseña coincidan con DiPlay, y reintenta.</string>
     <string name="settings_report_on_phone">Obtener el informe en un teléfono</string>
     <string name="settings_report_on_phone_hint">Escanea el código con la cámara del teléfono para abrir esta página en su navegador y elige Descargar informe. Mantén esta pantalla abierta hasta que termine la descarga.</string>
+    <string name="settings_report_direct_hint">El Wi-Fi del coche está aislado y ningún teléfono puede acceder a él, así que el informe usa un enlace directo. Actívalo y escanea el código de abajo con el teléfono.</string>
+    <string name="settings_report_direct_start">Activar el enlace directo</string>
+    <string name="settings_report_direct_starting">Preparando el enlace directo…</string>
+    <string name="settings_report_direct_join">En el teléfono, únete a la red «%1$s». El código de abajo se une automáticamente.</string>
+    <string name="settings_report_direct_password">Contraseña de la red: %1$s</string>
+    <string name="settings_report_direct_preparing">Preparando la dirección. Mantén esta pantalla abierta.</string>
+    <string name="settings_report_direct_permission">Permite el acceso al Wi-Fi cercano para que DiPlay active el enlace directo.</string>
+    <string name="settings_report_direct_failed">El enlace directo no pudo iniciarse. Activa el Wi-Fi, finaliza CarPlay inalámbrico y vuelve a intentarlo.</string>
     <string name="settings_mfi_target_description">Elige USB/CH341 solo si hay un adaptador de autenticación CH341 conectado a la unidad principal. Sin él, elige Local sin conexión. Se aplica en la próxima conexión.</string>
     <string name="settings_call_speakerphone">Llamadas por el altavoz</string>
     <string name="settings_call_speakerphone_description">Para un teléfono o una tableta Android usados como unidad principal: reproduce las llamadas de CarPlay por su altavoz en lugar del auricular y usa su micrófono manos libres. Déjalo desactivado en la unidad principal de un coche. Se aplica desde la próxima llamada.</string>

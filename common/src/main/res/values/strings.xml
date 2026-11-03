@@ -1018,6 +1018,14 @@
     <string name="connection_help_existing_wifi">Make sure the head unit and the iPhone are on the same Wi-Fi network and its name and password match DiPlay settings, then retry.</string>
     <string name="settings_report_on_phone">Get the report on a phone</string>
     <string name="settings_report_on_phone_hint">Scan the code with the phone camera to open this page in its browser, then choose Download report. Keep this screen open until the download has finished.</string>
+    <string name="settings_report_direct_hint">The car\'s own Wi-Fi is isolated and no phone can reach it, so the report uses a direct link instead. Turn it on, then scan the code below with the phone.</string>
+    <string name="settings_report_direct_start">Turn on the direct link</string>
+    <string name="settings_report_direct_starting">Preparing the direct link…</string>
+    <string name="settings_report_direct_join">On the phone, join the network “%1$s”. The code below joins it automatically.</string>
+    <string name="settings_report_direct_password">Network password: %1$s</string>
+    <string name="settings_report_direct_preparing">Getting the address ready. Keep this screen open.</string>
+    <string name="settings_report_direct_permission">Allow nearby Wi-Fi access so DiPlay can start the direct link.</string>
+    <string name="settings_report_direct_failed">The direct link could not start. Turn Wi-Fi on, end wireless CarPlay, and try again.</string>
     <string name="settings_mfi_target_description">Choose USB/CH341 only while a CH341 authentication adapter is connected to the head unit. Without one, choose Local offline. Applies at the next connection.</string>
     <string name="settings_call_speakerphone">Calls on the loudspeaker</string>
     <string name="settings_call_speakerphone_description">For an Android phone or tablet used as the head unit: plays CarPlay calls on its loudspeaker instead of the earpiece and uses its hands-free microphone. Leave off on a car head unit. Applies from the next call.</string>
